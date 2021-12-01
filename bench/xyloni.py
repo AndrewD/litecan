@@ -39,7 +39,7 @@ class BenchSoC(BaseSoC):
         if can_pads is not None:
             name = "ctu_can_fd0"
             self.mem_map[name] = 0x90000000
-            can = CTUCANFD(self.platform, pads=can_pads)
+            can = CTUCANFD(self.platform, pads=can_pads, variant="ghdl-verilog")
             setattr(self.submodules, name, can)
             if self.irq.enabled:
                 self.add_interrupt(name)
