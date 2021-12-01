@@ -82,5 +82,3 @@ rtl/bus_sampling/data_edge_detector.vhd
 rtl/bus_sampling/bit_err_detector.vhd
 rtl/bus_sampling/bus_sampling.vhd
 rtl/can_top_level.vhd
-rtl/can_top_apb.vhd
-rtl/can_top_ahb.vhd

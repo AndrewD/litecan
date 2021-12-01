@@ -14,7 +14,7 @@ from litex.soc.interconnect.csr_eventmanager import *
 # CTU CAN FD -----------------------------------------------------------------------------------------
 
 class CTUCANFD(Module, AutoCSR):
-    def __init__(self, platform, pads, timestamp = None):
+    def __init__(self, platform, pads, timestamp = None, variant="standard"):
         self.pads = pads
 
         self.bus = wishbone.Interface(data_width=32, adr_width=14)
@@ -114,7 +114,7 @@ class CTUCANFD(Module, AutoCSR):
                 srcfile = os.path.join(sdir, line.strip().replace('rtl', 'src'))
                 sources.append(srcfile)
 
-            if True: # GHDL -> verilog
+            if "ghdl-verilog" in variant: # GHDL -> verilog
                 from litex.build import tools
                 ys = []
                 ys.append("ghdl --ieee=synopsys -fexplicit -frelaxed-rules --std=08 \\")
@@ -128,7 +128,7 @@ class CTUCANFD(Module, AutoCSR):
                 if subprocess.call(["yosys", "-q", "ctucanfd.ys"]):
                     raise OSError("Unable to convert CTU CAN FD controller to verilog, please check your Yosys install")
                 platform.add_source(os.path.join(cdir, "ctucanfd.v"))
-            elif True: # GHDL only
+            elif "ghdl" in variant: # GHDL only
                 cmds = '--work=ctu_can_fd_rtl '
                 cmds += '--ieee=synopsys -fexplicit -frelaxed-rules --std=08 '
                 cmds += ' \\\n'.join(sources)
@@ -137,3 +137,5 @@ class CTUCANFD(Module, AutoCSR):
                 cmds += f"\nwrite_verilog {os.path.join(cdir, 'ctucanfd.v')}"
 
                 platform.sources.append((cmds, "ghdl", "work")) # depends of a litex "tweak"
+            else: # direct VHDL
+                platform.add_sources(sdir, *sources, library="ctu_can_fd_rtl")

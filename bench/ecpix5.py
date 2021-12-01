@@ -96,7 +96,7 @@ class LiteScopeSoC(BaseSoC):
         if can_pads is not None:
             name = "ctu_can_fd0"
             self.mem_map[name] = 0x03000000
-            can = CTUCANFD(self.platform, pads=can_pads, timestamp=count)
+            can = CTUCANFD(self.platform, pads=can_pads, timestamp=count, variant="ghdl-verilog")
             setattr(self.submodules, name, can)
             if self.irq.enabled:
                 self.add_interrupt(name)
