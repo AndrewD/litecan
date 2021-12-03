@@ -14,7 +14,7 @@ from litex.soc.interconnect.csr_eventmanager import *
 # CTU CAN FD -----------------------------------------------------------------------------------------
 
 class CTUCANFD(Module, AutoCSR):
-    def __init__(self, platform, pads, timestamp = None, variant="standard"):
+    def __init__(self, platform, pads, timestamp = None, variant="ghdl-verilog"):
         self.pads = pads
 
         self.bus = wishbone.Interface(data_width=32, adr_width=14)
@@ -125,7 +125,7 @@ class CTUCANFD(Module, AutoCSR):
                 ys.append("chformal -assert -remove")
                 ys.append("write_verilog {}".format(os.path.join(cdir, "ctucanfd.v")))
                 tools.write_to_file("ctucanfd.ys", "\n".join(ys))
-                if subprocess.call(["yosys", "-q", "ctucanfd.ys"]):
+                if subprocess.call(["yosys", "-q", "ctucanfd.ys", "-m", "ghdl"]):
                     raise OSError("Unable to convert CTU CAN FD controller to verilog, please check your Yosys install")
                 platform.add_source(os.path.join(cdir, "ctucanfd.v"))
             elif "ghdl" in variant: # GHDL only
