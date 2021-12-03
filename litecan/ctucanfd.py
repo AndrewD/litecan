@@ -36,6 +36,12 @@ class CTUCANFD(Module, AutoCSR):
             self.comb += self.timestamp.eq(timestamp)
 
         if True:
+            sbe = Signal(4)
+            self.comb += If(self.bus.we,
+                sbe.eq(self.bus.sel)
+            ).Else(
+                sbe.eq(0b1111)
+            )
             self.specials += Instance("can_top_level",
                 # generic config: defaults are commented
                 # TODO: enable parameters when this works with GHDL
@@ -75,7 +81,7 @@ class CTUCANFD(Module, AutoCSR):
                 i_scs = self.bus.cyc & self.bus.stb,
                 i_srd = ~self.bus.we,
                 i_swr = self.bus.we,
-                i_sbe = self.bus.sel,
+                i_sbe = sbe,
 
                 # Interrupt output
                 o_irq = self.ev.interrupt.trigger,
