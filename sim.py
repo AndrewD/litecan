@@ -4,6 +4,7 @@ import sys
 import argparse
 
 from migen import *
+from migen.genlib.misc import WaitTimer
 
 from litex.build.generic_platform import *
 from litex.build.sim import SimPlatform
@@ -13,6 +14,7 @@ from litex.soc.integration.common import *
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
 from litex.soc.integration.soc import *
+from litex.soc.interconnect import wishbone
 
 from litecan.ctucanfd import CTUCANFD
 
@@ -42,7 +44,6 @@ class SimSoC(SoCMini):
     def __init__(self):
         platform     = Platform()
         sys_clk_freq = int(1e6)
-        self.comb += platform.trace.eq(1)
 
         # SoCMini ----------------------------------------------------------------------------------
         SoCMini.__init__(self, platform, clk_freq=sys_clk_freq)
@@ -52,16 +53,44 @@ class SimSoC(SoCMini):
 
         # CAN-FD -----------------------------------------------------------------------------------
         self.submodules.can = CTUCANFD(self.platform, pads=platform.request("can"))
-        self.bus.add_slave("can", self.can.bus, SoCRegion(origin=0x90000000, size=65536))
 
-        # Finish -----------------------------------------------------------------------------------
-        cycles = Signal(32)
-        self.sync += cycles.eq(cycles + 1)
-        self.sync += If(cycles == 1000,
-            Display("-"*80),
-            Display("Cycles: %d", cycles),
-            Finish(),
-        )
+        # CAN-FD Tester ----------------------------------------------------------------------------
+        class CANFDTester(Module):
+            def __init__(self, can):
+                offset = Signal(8)
+                self.submodules.fsm = fsm = FSM(reset_state="DUMP")
+                fsm.act("DUMP",
+                    can.bus.stb.eq(1),
+                    can.bus.cyc.eq(1),
+                    can.bus.adr.eq(offset),
+                    If(can.bus.ack,
+                        NextState("CHECK-UPDATE")
+                    ),
+                )
+                fsm.act("CHECK-UPDATE",
+                    NextValue(offset, offset + 1),
+                    If(offset == (64-1),
+                        NextState("DONE")
+                    ).Else(
+                        NextState("DUMP")
+                    )
+                )
+                fsm.act("DONE")
+
+                # Dump Display.
+                self.comb += platform.trace.eq(~fsm.ongoing("DONE"))
+                self.sync += If(can.bus.stb & can.bus.ack, Display("Addr: %08x / Data: %08x",
+                    can.bus.adr,
+                    can.bus.dat_r
+                ))
+
+                # Finish when Dump Done.
+                finish_timer = WaitTimer(10000)
+                self.submodules += finish_timer
+                self.comb += finish_timer.wait.eq(fsm.ongoing("DONE"))
+                self.sync += If(finish_timer.done, Finish())
+
+        self.submodules.can_fd_tester = CANFDTester(self.can)
 
 # Build --------------------------------------------------------------------------------------------
 
@@ -82,7 +111,7 @@ def main():
         threads          = 1,
         sim_config       = sim_config,
         opt_level        = "O0",
-        trace            = True
+        trace            = True,
     )
 
 if __name__ == "__main__":
