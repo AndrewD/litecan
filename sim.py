@@ -58,7 +58,10 @@ class SimSoC(SoCMini):
         class CANFDTester(Module):
             def __init__(self, can):
                 offset = Signal(8)
-                self.submodules.fsm = fsm = FSM(reset_state="DUMP")
+                self.submodules.fsm = fsm = FSM(reset_state="IDLE")
+                fsm.act("IDLE",
+                    NextState("DUMP")
+                )
                 fsm.act("DUMP",
                     can.bus.stb.eq(1),
                     can.bus.cyc.eq(1),
