@@ -25,10 +25,7 @@ class CTUCANFD(Module, AutoCSR):
         self.variant = variant
 
         # Wishbone Bus.
-        self.bus = wishbone.Interface(data_width=32, adr_width=14)
-        self.adr = Signal(16) # 16 in can_top_level but only 12bits implemented
-        # wb address is 32bit
-        self.comb += self.adr[2:].eq(self.bus.adr)
+        self.bus = wishbone.Interface(data_width=32)
 
         # CSRs.
         self.submodules.ev = EventManager()
@@ -79,7 +76,7 @@ class CTUCANFD(Module, AutoCSR):
             # Memory interface
             i_data_in = self.bus.dat_w,
             o_data_out = self.bus.dat_r,
-            i_adress = self.adr,
+            i_adress = Cat(Signal(2), self.bus.adr), # 32-bit Word-addressing to Bytes.
             # chip select
             i_scs = self.bus.cyc & self.bus.stb,
             i_srd = ~self.bus.we,
