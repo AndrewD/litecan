@@ -127,10 +127,19 @@ class BaseSoC(SoCCore):
                 sys_clk_freq = sys_clk_freq)
 
         # CTU CAN-FD -------------------------------------------------------------------------------
+        from litex.build.generic_platform import Subsignal, Pins, Misc, IOStandard
         from litex.soc.integration.soc import SoCRegion
         from ctucanfd import CTUCANFD
-        can_pads = Record([("tx", 1), ("rx", 1)])
-        self.submodules.ctu_can_fd = CTUCANFD(self.platform, pads=can_pads)
+        _can_fd_ios = [
+            ("can_fd", 0,
+                Subsignal("tx", Pins("pmod0:0")),
+                Subsignal("rx", Pins("pmod0:1")),
+                Misc("SLEWRATE=FAST"),
+                IOStandard("LVCMOS33"),
+            )
+        ]
+        self.platform.add_extension(_can_fd_ios)
+        self.submodules.ctu_can_fd = CTUCANFD(self.platform, pads=platform.request("can_fd", 0))
         self.bus.add_slave(name="ctu_can_fd", slave=self.ctu_can_fd.bus, region=SoCRegion(size=0x1000, cached=False))
 
 # Build --------------------------------------------------------------------------------------------
