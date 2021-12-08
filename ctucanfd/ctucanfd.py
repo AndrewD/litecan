@@ -35,10 +35,45 @@ class CTUCANFD(Module, AutoCSR):
         self._reset = CSRStorage(1, description="""Reset the core.
             Set this flag to ``1`` to hold the core in reset.  Set to ``0`` for normal operation.""")
 
-        # CTU CAN-FD Instance.
+        # CTU CAN-FD Instance ----------------------------------------------------------------------
         self.core_params = dict()
 
+        # Wishbone to CTU CAN-FD Memory Bus adaptation.
+        mem_scs      = Signal()
+        mem_srd      = Signal()
+        mem_swr      = Signal()
+        mem_sbe      = Signal(4)
+        mem_adress   = Signal(16)
+        mem_data_in  = Signal(32)
+        mem_data_out = Signal(32)
 
+        self.comb += [
+            # Set scs on Access cycle.
+            mem_scs.eq(self.bus.cyc & self.bus.stb),
+
+            # Set swr on Write and use sel as sbe.
+            If(self.bus.we,
+                mem_swr.eq(1),
+                mem_sbe.eq(self.bus.sel)
+
+            # Set srd on Read and set sbe to 0b1111.
+            ).Else(
+                mem_srd.eq(1),
+                mem_sbe.eq(0b1111)
+            ),
+
+            # Convert 32-bit word addressing to bytes addressing.
+            mem_adress.eq(Cat(Signal(2), self.bus.adr)),
+
+            # Connect data_in/out.
+            mem_data_in.eq(self.bus.dat_w),
+            self.bus.dat_r.eq(mem_data_out),
+        ]
+        cs = Signal()
+        self.sync += cs.eq(self.bus.stb & self.bus.cyc),
+        self.sync += self.bus.ack.eq(cs & self.bus.stb & self.bus.cyc)
+
+        # CTU CAN-FD Parameters.
         if variant == "ghdl-verilog":
             print("WARNING: Using default CTU CAN-FD parameters due to a GHDL limitation!")
             print("See: https://github.com/ghdl/ghdl-yosys-plugin/issues/136")
@@ -66,31 +101,24 @@ class CTUCANFD(Module, AutoCSR):
                 #p_target_technology = C_TECH_FPGA
         )
 
-        sbe = Signal(4)
-        self.comb += If(self.bus.we,
-            sbe.eq(self.bus.sel)
-        ).Else(
-            sbe.eq(0b1111)
-        )
+        # CTU CAN-FD Signals.
+
         self.core_params.update(
-            # System clock
+            # Clk / Rst.
             i_clk_sys = ClockSignal("sys"),
-            # Asynchronous reset
-            i_res_n = ~self._reset.storage, #ResetSignal("sys"),
-            # Synchronized reset
-            # o_res_n_out
-            # DFT support (ASIC only)
+            i_res_n   = ~(ResetSignal("sys") | self._reset.storage),
+
+            # DFT support (ASIC only).
             i_scan_enable = 0,
 
-            # Memory interface
-            i_data_in = self.bus.dat_w,
-            o_data_out = self.bus.dat_r,
-            i_adress = Cat(Signal(2), self.bus.adr), # 32-bit Word-addressing to Bytes.
-            # chip select
-            i_scs = self.bus.cyc & self.bus.stb,
-            i_srd = ~self.bus.we,
-            i_swr = self.bus.we,
-            i_sbe = sbe,
+            # Memory interface.
+            i_scs      = mem_scs,
+            i_srd      = mem_srd,
+            i_swr      = mem_swr,
+            i_sbe      = mem_sbe,
+            i_adress   = mem_adress,
+            i_data_in  = mem_data_in,
+            o_data_out = mem_data_out,
 
             # Interrupt output
             o_irq = self.ev.interrupt.trigger,
@@ -107,11 +135,6 @@ class CTUCANFD(Module, AutoCSR):
             i_timestamp = timestamp,
         )
         self.specials += Instance("can_top_level", **self.core_params)
-
-        # added cs to extend bus cycle with no effect
-        self.cs = cs = Signal()
-        self.sync += cs.eq(self.bus.stb & self.bus.cyc),
-        self.sync += self.bus.ack.eq(cs & self.bus.stb & self.bus.cyc)
 
         # Add Sources.
         self.add_sources(platform)
