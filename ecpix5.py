@@ -126,6 +126,13 @@ class BaseSoC(SoCCore):
                 pads         = Cat(leds_pads),
                 sys_clk_freq = sys_clk_freq)
 
+        # CTU CAN-FD -------------------------------------------------------------------------------
+        from litex.soc.integration.soc import SoCRegion
+        from ctucanfd import CTUCANFD
+        can_pads = Record([("tx", 1), ("rx", 1)])
+        self.submodules.ctu_can_fd = CTUCANFD(self.platform, pads=can_pads)
+        self.bus.add_slave(name="ctu_can_fd", slave=self.ctu_can_fd.bus, region=SoCRegion(size=0x1000, cached=False))
+
 # Build --------------------------------------------------------------------------------------------
 
 def main():
