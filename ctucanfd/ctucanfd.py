@@ -1,7 +1,8 @@
 #
-# This file depends on LiteX.
+# CTU CAN-FD Core Wrapper for LiteX.
 #
 # Copyright (c) 2021 Andrew Dennison <andrew@motec.com.au>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
@@ -13,7 +14,7 @@ from litex.build import tools
 from litex.soc.interconnect import wishbone
 from litex.soc.interconnect.csr_eventmanager import *
 
-# CTU CAN FD -----------------------------------------------------------------------------------------
+# CTU CAN-FD ---------------------------------------------------------------------------------------
 
 class CTUCANFD(Module, AutoCSR):
     def __init__(self, platform, pads, timestamp=0, variant="ghdl-verilog"):
@@ -37,76 +38,68 @@ class CTUCANFD(Module, AutoCSR):
         self._reset = CSRStorage(1, description="""Reset the core.
             Set this flag to ``1`` to hold the core in reset.  Set to ``0`` for normal operation.""")
 
-        # CTU CAN FD Instance.
-        if True:
-            sbe = Signal(4)
-            self.comb += If(self.bus.we,
-                sbe.eq(self.bus.sel)
-            ).Else(
-                sbe.eq(0b1111)
-            )
-            self.specials += Instance("can_top_level",
-                # generic config: defaults are commented
-                # TODO: enable parameters when this works with GHDL
-                # TODO: See https://github.com/ghdl/ghdl-yosys-plugin/issues/136
-                # RX Buffer RAM size (32 bit words)
-                # p_rx_buffer_size = 32,
-                # Number of supported TX buffers
-                # p_txt_buffer_count = 2,
-                # Synthesize Filter A-C
-                # p_sup_filtA = False,
-                # p_sup_filtB = False,
-                # p_sup_filtC = False,
-                # Synthesize Range Filter
-                # p_sup_filtV = False,
-                # Synthesize Test registers
-                # default is true but not recommended for FPGA??
-                # p_sup_test_registers = False,
-                # Insert Traffic counters
-                # p_sup_traffic_ctrs = False,
-                # Target technology (ASIC or FPGA)
-                # target_technology = C_TECH_FPGA
+        # CTU CAN-FD Instance.
+        sbe = Signal(4)
+        self.comb += If(self.bus.we,
+            sbe.eq(self.bus.sel)
+        ).Else(
+            sbe.eq(0b1111)
+        )
+        self.specials += Instance("can_top_level",
+            # generic config: defaults are commented
+            # TODO: enable parameters when this works with GHDL
+            # TODO: See https://github.com/ghdl/ghdl-yosys-plugin/issues/136
+            # RX Buffer RAM size (32 bit words)
+            # p_rx_buffer_size = 32,
+            # Number of supported TX buffers
+            # p_txt_buffer_count = 2,
+            # Synthesize Filter A-C
+            # p_sup_filtA = False,
+            # p_sup_filtB = False,
+            # p_sup_filtC = False,
+            # Synthesize Range Filter
+            # p_sup_filtV = False,
+            # Synthesize Test registers
+            # default is true but not recommended for FPGA??
+            # p_sup_test_registers = False,
+            # Insert Traffic counters
+            # p_sup_traffic_ctrs = False,
+            # Target technology (ASIC or FPGA)
+            # target_technology = C_TECH_FPGA
 
-                # System clock
-                i_clk_sys = ClockSignal("sys"),
-                # Asynchronous reset
-                i_res_n = ~self._reset.storage, #ResetSignal("sys"),
-                # Synchronized reset
-                # o_res_n_out
-                # DFT support (ASIC only)
-                i_scan_enable = 0,
+            # System clock
+            i_clk_sys = ClockSignal("sys"),
+            # Asynchronous reset
+            i_res_n = ~self._reset.storage, #ResetSignal("sys"),
+            # Synchronized reset
+            # o_res_n_out
+            # DFT support (ASIC only)
+            i_scan_enable = 0,
 
-                # Memory interface
-                i_data_in = self.bus.dat_w,
-                o_data_out = self.bus.dat_r,
-                i_adress = self.adr,
-                # chip select
-                i_scs = self.bus.cyc & self.bus.stb,
-                i_srd = ~self.bus.we,
-                i_swr = self.bus.we,
-                i_sbe = sbe,
+            # Memory interface
+            i_data_in = self.bus.dat_w,
+            o_data_out = self.bus.dat_r,
+            i_adress = self.adr,
+            # chip select
+            i_scs = self.bus.cyc & self.bus.stb,
+            i_srd = ~self.bus.we,
+            i_swr = self.bus.we,
+            i_sbe = sbe,
 
-                # Interrupt output
-                o_irq = self.ev.interrupt.trigger,
+            # Interrupt output
+            o_irq = self.ev.interrupt.trigger,
 
-                # TX signal to CAN bus
-                o_can_tx = pads.tx,
-                # RX signal from CAN bus
-                i_can_rx = pads.rx,
+            # TX signal to CAN bus
+            o_can_tx = pads.tx,
+            # RX signal from CAN bus
+            i_can_rx = pads.rx,
 
-                # Debug signals for testbench
-                # test_probe  : out t_ctu_can_fd_test_probe;
+            # Debug signals for testbench
+            # test_probe  : out t_ctu_can_fd_test_probe;
 
-                # 64 bit Timestamp for time based transmission / reception
-                i_timestamp = timestamp,
-            )
-        else:
-            # test WB is working
-            buf = Signal(32)
-            self.sync += If(self.bus.stb & self.bus.cyc & self.bus.we,
-                buf.eq(self.bus.dat_w)
-            )
-            self.comb += self.bus.dat_r.eq(buf)
+            # 64 bit Timestamp for time based transmission / reception
+            i_timestamp = timestamp,
+        )
 
         # added cs to extend bus cycle with no effect
         self.cs = cs = Signal()
