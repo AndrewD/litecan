@@ -36,34 +36,43 @@ class CTUCANFD(Module, AutoCSR):
             Set this flag to ``1`` to hold the core in reset.  Set to ``0`` for normal operation.""")
 
         # CTU CAN-FD Instance.
+        self.core_params = dict()
+
+
+        if variant == "ghdl-verilog":
+            print("WARNING: Using default CTU CAN-FD parameters due to a GHDL limitation!")
+            print("See: https://github.com/ghdl/ghdl-yosys-plugin/issues/136")
+        else:
+            self.core_params.udate(
+                # TX/RX Buffers.
+                p_txt_buffer_count = 2,  # Number of TX Buffers.
+                p_rx_buffer_size   = 32, # RX Buffer size (in 32-bit words).
+
+                # Filter A-C.
+                p_sup_filtA = False,
+                p_sup_filtB = False,
+                p_sup_filtC = False,
+
+                # Range Filter.
+                p_sup_filtV = False,
+
+                # Test registers.
+                p_sup_test_registers = False, # True by default but not recommended for FPGA?
+
+                # Traffic counters.
+                p_sup_traffic_ctrs = False,
+
+                # Target technology (ASIC or FPGA)
+                #p_target_technology = C_TECH_FPGA
+        )
+
         sbe = Signal(4)
         self.comb += If(self.bus.we,
             sbe.eq(self.bus.sel)
         ).Else(
             sbe.eq(0b1111)
         )
-        self.specials += Instance("can_top_level",
-            # generic config: defaults are commented
-            # TODO: enable parameters when this works with GHDL
-            # TODO: See https://github.com/ghdl/ghdl-yosys-plugin/issues/136
-            # RX Buffer RAM size (32 bit words)
-            # p_rx_buffer_size = 32,
-            # Number of supported TX buffers
-            # p_txt_buffer_count = 2,
-            # Synthesize Filter A-C
-            # p_sup_filtA = False,
-            # p_sup_filtB = False,
-            # p_sup_filtC = False,
-            # Synthesize Range Filter
-            # p_sup_filtV = False,
-            # Synthesize Test registers
-            # default is true but not recommended for FPGA??
-            # p_sup_test_registers = False,
-            # Insert Traffic counters
-            # p_sup_traffic_ctrs = False,
-            # Target technology (ASIC or FPGA)
-            # target_technology = C_TECH_FPGA
-
+        self.core_params.update(
             # System clock
             i_clk_sys = ClockSignal("sys"),
             # Asynchronous reset
@@ -97,6 +106,7 @@ class CTUCANFD(Module, AutoCSR):
             # 64 bit Timestamp for time based transmission / reception
             i_timestamp = timestamp,
         )
+        self.specials += Instance("can_top_level", **self.core_params)
 
         # added cs to extend bus cycle with no effect
         self.cs = cs = Signal()
