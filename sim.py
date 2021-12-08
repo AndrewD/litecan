@@ -44,6 +44,7 @@ class SimSoC(SoCMini):
     def __init__(self):
         platform     = Platform()
         sys_clk_freq = int(1e6)
+        self.comb += platform.trace.eq(1)
 
         # SoCMini ----------------------------------------------------------------------------------
         SoCMini.__init__(self, platform, clk_freq=sys_clk_freq)
@@ -57,10 +58,14 @@ class SimSoC(SoCMini):
         # CAN-FD Tester ----------------------------------------------------------------------------
         class CANFDTester(Module):
             def __init__(self, can):
+                count  = Signal(8)
                 offset = Signal(8)
                 self.submodules.fsm = fsm = FSM(reset_state="IDLE")
                 fsm.act("IDLE",
-                    NextState("DUMP")
+                    NextValue(count, count + 1),
+                    If(count == 128,
+                        NextState("DUMP")
+                    )
                 )
                 fsm.act("DUMP",
                     can.bus.stb.eq(1),
@@ -68,24 +73,55 @@ class SimSoC(SoCMini):
                     can.bus.adr.eq(offset),
                     If(can.bus.ack,
                         NextState("CHECK-UPDATE")
-                    ),
+                    )
                 )
                 fsm.act("CHECK-UPDATE",
                     NextValue(offset, offset + 1),
                     If(offset == (64-1),
-                        NextState("DONE")
+                        NextState("SET-TSTM")
                     ).Else(
                         NextState("DUMP")
+                    )
+                )
+                fsm.act("SET-TSTM",
+                    can.bus.stb.eq(1),
+                    can.bus.cyc.eq(1),
+                    can.bus.we.eq(1),
+                    can.bus.sel.eq(0b1111),
+                    can.bus.adr.eq(0x004 >> 2),
+                    can.bus.dat_w.eq(0x02000210 | 0x100),
+                    If(can.bus.ack,
+                        NextState("WRITE-TEST-WDATA")
+                    )
+                )
+                fsm.act("WRITE-TEST-WDATA",
+                    can.bus.stb.eq(1),
+                    can.bus.cyc.eq(1),
+                    can.bus.we.eq(1),
+                    can.bus.sel.eq(0b1111),
+                    can.bus.adr.eq(0x908 >> 2),
+                    can.bus.dat_w.eq(0x5aa55aa5),
+                    If(can.bus.ack,
+                        NextState("READ-TEST-RDATA")
+                    )
+                )
+                fsm.act("READ-TEST-RDATA",
+                    can.bus.stb.eq(1),
+                    can.bus.cyc.eq(1),
+                    can.bus.adr.eq(0x908 >> 2),
+                    If(can.bus.ack,
+                        NextState("DONE")
                     )
                 )
                 fsm.act("DONE")
 
                 # Dump Display.
-                self.comb += platform.trace.eq(~fsm.ongoing("DONE"))
                 self.sync += If(can.bus.stb & can.bus.ack,
-                    Display("Addr: %08x / Data: %08x",
+                    Display("Addr: %08x / RD-Data: %08x / WR-DATA: %08x / WR: %d",
                         can.bus.adr,
-                        can.bus.dat_r
+                        can.bus.dat_r,
+                        can.bus.dat_w,
+                        can.bus.we,
                 ))
 
                 # Finish when Dump Done.
