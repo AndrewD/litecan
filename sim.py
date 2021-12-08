@@ -82,9 +82,10 @@ class SimSoC(SoCMini):
 
                 # Dump Display.
                 self.comb += platform.trace.eq(~fsm.ongoing("DONE"))
-                self.sync += If(can.bus.stb & can.bus.ack, Display("Addr: %08x / Data: %08x",
-                    can.bus.adr,
-                    can.bus.dat_r
+                self.sync += If(can.bus.stb & can.bus.ack,
+                    Display("Addr: %08x / Data: %08x",
+                        can.bus.adr,
+                        can.bus.dat_r
                 ))
 
                 # Finish when Dump Done.

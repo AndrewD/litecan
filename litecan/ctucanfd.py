@@ -5,20 +5,31 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
+import subprocess
 
 from migen import *
 
+from litex.build import tools
 from litex.soc.interconnect import wishbone
 from litex.soc.interconnect.csr_eventmanager import *
 
 # CTU CAN FD -----------------------------------------------------------------------------------------
 
 class CTUCANFD(Module, AutoCSR):
-    def __init__(self, platform, pads, timestamp = None, variant="ghdl-verilog"):
-        self.pads = pads
+    def __init__(self, platform, pads, timestamp=0, variant="ghdl-verilog"):
+        # Parameters.
+        assert variant in ["vhdl", "ghdl-verilog"]
+        self.platform = platform
+        self.pads     = pads
+        self.variant = variant
 
+        # Wishbone Bus.
         self.bus = wishbone.Interface(data_width=32, adr_width=14)
         self.adr = Signal(16) # 16 in can_top_level but only 12bits implemented
+        # wb address is 32bit
+        self.comb += self.adr[2:].eq(self.bus.adr)
+
+        # CSRs.
         self.submodules.ev = EventManager()
         self.ev.interrupt = EventSourceLevel()
         self.ev.finalize()
@@ -26,15 +37,7 @@ class CTUCANFD(Module, AutoCSR):
         self._reset = CSRStorage(1, description="""Reset the core.
             Set this flag to ``1`` to hold the core in reset.  Set to ``0`` for normal operation.""")
 
-        # wb address is 32bit
-        self.comb += self.adr[2:].eq(self.bus.adr)
-
-        if timestamp is None:
-            self.timestamp = 0
-        else:
-            self.timestamp = Signal(64)
-            self.comb += self.timestamp.eq(timestamp)
-
+        # CTU CAN FD Instance.
         if True:
             sbe = Signal(4)
             self.comb += If(self.bus.we,
@@ -95,7 +98,7 @@ class CTUCANFD(Module, AutoCSR):
                 # test_probe  : out t_ctu_can_fd_test_probe;
 
                 # 64 bit Timestamp for time based transmission / reception
-                i_timestamp = self.timestamp,
+                i_timestamp = timestamp,
             )
         else:
             # test WB is working
@@ -108,20 +111,28 @@ class CTUCANFD(Module, AutoCSR):
         # added cs to extend bus cycle with no effect
         self.cs = cs = Signal()
         self.sync += cs.eq(self.bus.stb & self.bus.cyc),
-        self.sync += self.bus.ack.eq(cs & self.bus.stb & self.bus.cyc),
+        self.sync += self.bus.ack.eq(cs & self.bus.stb & self.bus.cyc)
 
+        # Add Sources.
+        self.add_sources(platform)
+
+    def add_sources(self, platform):
         sources = []
         cdir = os.path.dirname(__file__)
         sdir = os.path.abspath(os.path.join(cdir, 'ctucanfd_ip_core'))
 
         with open(os.path.join(cdir, 'rtl_lst.txt')) as f:
-            import subprocess
+
             for line in f:
                 srcfile = os.path.join(sdir, line.strip().replace('rtl', 'src'))
                 sources.append(srcfile)
 
-            if "ghdl-verilog" in variant: # GHDL -> verilog
-                from litex.build import tools
+            # Direct VHDL.
+            if self.variant == "vhdl":
+                platform.add_sources(sdir, *sources, library="ctu_can_fd_rtl")
+
+            # Verilog (through GHDL/VHDL translation).
+            if self.variant == "ghdl-verilog":
                 ys = []
                 ys.append("ghdl --ieee=synopsys -fexplicit -frelaxed-rules --std=08 \\")
                 ys.append("--work=ctu_can_fd_rtl \\")
@@ -134,14 +145,3 @@ class CTUCANFD(Module, AutoCSR):
                 if subprocess.call(["yosys", "-q", "ctucanfd.ys", "-m", "ghdl"]):
                     raise OSError("Unable to convert CTU CAN FD controller to verilog, please check your Yosys install")
                 platform.add_source(os.path.join(cdir, "ctucanfd.v"))
-            elif "ghdl" in variant: # GHDL only
-                cmds = '--work=ctu_can_fd_rtl '
-                cmds += '--ieee=synopsys -fexplicit -frelaxed-rules --std=08 '
-                cmds += ' \\\n'.join(sources)
-                cmds += ' \\\n -e can_top_level'
-                # output verilog for debug only
-                cmds += f"\nwrite_verilog {os.path.join(cdir, 'ctucanfd.v')}"
-
-                platform.sources.append((cmds, "ghdl", "work")) # depends of a litex "tweak"
-            else: # direct VHDL
-                platform.add_sources(sdir, *sources, library="ctu_can_fd_rtl")
