@@ -28,12 +28,24 @@ class CTUCANFD(Module, AutoCSR):
         self.bus = wishbone.Interface(data_width=32)
 
         # CSRs.
+        self.control = CSRStorage(32, fields=[
+            CSRField("reset", size=1, values=[
+                ("``0b0``", "Normal Operation."),
+                ("``0b1`",  "Hold the Core in Reset."),
+            ], reset=0b0),
+            CSRField("reserved",size=31),
+        ])
+        self.status = CSRStatus(32, fields=[
+            CSRField("ready", size=1, values=[
+                ("``0b0``", "Core in Reset."),
+                ("``0b1`",  "Core Ready."),
+            ]),
+        ])
+
+        # IRQs.
         self.submodules.ev = EventManager()
         self.ev.interrupt = EventSourceLevel()
         self.ev.finalize()
-
-        self._reset = CSRStorage(1, description="""Reset the core.
-            Set this flag to ``1`` to hold the core in reset.  Set to ``0`` for normal operation.""")
 
         # CTU CAN-FD Instance ----------------------------------------------------------------------
         self.core_params = dict()
@@ -48,18 +60,19 @@ class CTUCANFD(Module, AutoCSR):
         mem_data_out = Signal(32)
 
         self.comb += [
-            # Set scs on Access cycle.
-            mem_scs.eq(self.bus.cyc & self.bus.stb),
-
-            # Set swr on Write and use sel as sbe.
-            If(self.bus.we,
-                mem_swr.eq(1),
-                mem_sbe.eq(self.bus.sel)
-
-            # Set srd on Read and set sbe to 0b1111.
-            ).Else(
-                mem_srd.eq(1),
-                mem_sbe.eq(0b1111)
+            # On Wishbone Access cycle...
+            If(self.bus.cyc & self.bus.stb,
+                # Set scs.
+                mem_scs.eq(1),
+                # On Write, set swr on use sel as sbe.
+                If(self.bus.we,
+                    mem_swr.eq(1),
+                    mem_sbe.eq(self.bus.sel)
+                # On Read, set srd and set sbe to 0b1111.
+                ).Else(
+                    mem_srd.eq(1),
+                    mem_sbe.eq(0b1111)
+                )
             ),
 
             # Convert 32-bit word addressing to bytes addressing.
@@ -69,9 +82,7 @@ class CTUCANFD(Module, AutoCSR):
             mem_data_in.eq(self.bus.dat_w),
             self.bus.dat_r.eq(mem_data_out),
         ]
-        cs = Signal()
-        self.sync += cs.eq(self.bus.stb & self.bus.cyc),
-        self.sync += self.bus.ack.eq(cs & self.bus.stb & self.bus.cyc)
+        self.sync += self.bus.ack.eq(mem_scs & ~self.bus.ack)
 
         # CTU CAN-FD Parameters.
         if variant == "ghdl-verilog":
@@ -79,6 +90,9 @@ class CTUCANFD(Module, AutoCSR):
             print("See: https://github.com/ghdl/ghdl-yosys-plugin/issues/136")
         else:
             self.core_params.udate(
+                # Target technology (ASIC or FPGA)
+                #p_target_technology = C_TECH_FPGA
+
                 # TX/RX Buffers.
                 p_txt_buffer_count = 2,  # Number of TX Buffers.
                 p_rx_buffer_size   = 32, # RX Buffer size (in 32-bit words).
@@ -96,20 +110,21 @@ class CTUCANFD(Module, AutoCSR):
 
                 # Traffic counters.
                 p_sup_traffic_ctrs = False,
-
-                # Target technology (ASIC or FPGA)
-                #p_target_technology = C_TECH_FPGA
         )
 
         # CTU CAN-FD Signals.
 
         self.core_params.update(
             # Clk / Rst.
-            i_clk_sys = ClockSignal("sys"),
-            i_res_n   = ~(ResetSignal("sys") | self._reset.storage),
+            i_clk_sys   = ClockSignal("sys"),
+            i_res_n     = ~(ResetSignal("sys") | self.control.fields.reset),
+            o_res_n_out = self.status.fields.ready,
 
             # DFT support (ASIC only).
             i_scan_enable = 0,
+
+            # Timestamp (For time based transmission / reception).
+            i_timestamp = timestamp,
 
             # Memory interface.
             i_scs      = mem_scs,
@@ -120,19 +135,15 @@ class CTUCANFD(Module, AutoCSR):
             i_data_in  = mem_data_in,
             o_data_out = mem_data_out,
 
-            # Interrupt output
+            # Interrupt.
             o_irq = self.ev.interrupt.trigger,
 
-            # TX signal to CAN bus
+            # CAN Bus.
             o_can_tx = pads.tx,
-            # RX signal from CAN bus
             i_can_rx = pads.rx,
 
-            # Debug signals for testbench
-            # test_probe  : out t_ctu_can_fd_test_probe;
-
-            # 64 bit Timestamp for time based transmission / reception
-            i_timestamp = timestamp,
+            # Debug.
+            #o_test_probe = ,
         )
         self.specials += Instance("can_top_level", **self.core_params)
 
