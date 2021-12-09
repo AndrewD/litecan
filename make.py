@@ -61,7 +61,7 @@ class ECPIX5(Board):
     ]
 
     def __init__(self):
-        import ecpix5
+        from litex_boards.targets import ecpix5
         Board.__init__(self, ecpix5.BaseSoC, soc_capabilities={
             # Communication
             "serial",
