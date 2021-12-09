@@ -23,11 +23,10 @@ kB = 1024
 
 class Board:
     soc_kwargs = {"integrated_rom_size": 0x10000, "l2_size": 0}
-    def __init__(self, soc_cls=None, soc_capabilities={}, soc_constants={}, soc_extension=[], bitstream_ext=""):
+    def __init__(self, soc_cls=None, soc_capabilities={}, soc_constants={}, bitstream_ext=""):
         self.soc_cls          = soc_cls
         self.soc_capabilities = soc_capabilities
         self.soc_constants    = soc_constants
-        self.soc_extension    = soc_extension
         self.bitstream_ext    = bitstream_ext
 
     def load(self, filename):
@@ -52,7 +51,8 @@ class ECPIX5(Board):
         "sys_clk_freq" : int(50e6),
         "l2_size"      : 2048, # Use Wishbone and L2 for memory accesses.
     }
-    extension_io = [
+    from litex.build.generic_platform import Subsignal, Pins, Misc, IOStandard
+    io_extension = [
         ("can", 0,
             Subsignal("tx", Pins("pmod3:6")),
             Subsignal("rx", Pins("pmod3:2")),
@@ -72,8 +72,8 @@ class ECPIX5(Board):
             "sata",
             "sdcard",
             "spiflash",
-            #"can",
-        }, soc_extension=self.extension_io, bitstream_ext=".bit")
+            "can",
+        }, bitstream_ext=".bit")
 
 #---------------------------------------------------------------------------------------------------
 # Build
@@ -154,8 +154,8 @@ def main():
             soc.add_constant(k, v)
 
         # SoC peripherals --------------------------------------------------------------------------
-        if board.soc_extension is not None:
-            board.platform.add_extension(board.soc_extension)
+        if hasattr(board, "io_extension"):
+            board.platform.add_extension(board.io_extension)
 
         if board_name in ["arty", "arty_a7"]:
             from litex_boards.platforms.arty import _sdcard_pmod_io

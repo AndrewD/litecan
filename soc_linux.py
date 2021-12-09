@@ -110,32 +110,18 @@ def SoCLinux(soc_cls, **kwargs):
             self.add_csr("i2c0")
 
         # CAN --------------------------------------------------------------------------------------
-        def add_can(self):
-            from litecan.ctucanfd import CTUCANFD
+        def add_can(self, n=1):
+            from ctucanfd import CTUCANFD
             from litex.soc.integration.soc import SoCRegion
 
-            for i in range(1):
-                if True:
-                    can_pads = self.platform.request("can", i, loose=True)
-                else:
-                    io = [
-                        ("tx", 1),
-                        ("rx", 1),
-                    ]
-                    # attach dummy IO
-                    can_pads = Record(io)
-
+            for i in range(n):
                 name = f"ctu_can_fd{i}"
-                if can_pads is not None:
-                    print("adding", name)
-                    can = CTUCANFD(self.platform, pads=can_pads)
-                    setattr(self.submodules, name, can)
-                    self.add_interrupt(name)
-
-                    self.bus.add_slave(name, can.bus, SoCRegion(origin=self.mem_map[name], size=65536, mode="rw", cached=False))
-                    print(f"added", name)
-                else:
-                    print(name, "not found")
+                can_pads = self.platform.request("can", i)
+                print(can_pads)
+                can = CTUCANFD(self.platform, pads=can_pads)
+                setattr(self.submodules, name, can)
+                self.add_interrupt(name)
+                self.bus.add_slave(name, can.bus, SoCRegion(origin=self.mem_map[name], size=0x10000, mode="rw", cached=False))
 
         # XADC (Xilinx only) -----------------------------------------------------------------------
         def add_xadc(self):
