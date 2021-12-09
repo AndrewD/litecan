@@ -1,0 +1,11 @@
+
+config BR2_PACKAGE_VEXRISCV_AES
+	bool "VexRiscv AES custom instruction"
+	help
+	  Enable VexRiscv AES custom instruction usage in openssl and dropbear
+
+config BR2_PACKAGE_CTU_CAN_FD
+	bool "CTU CAN FD CAN driver"
+	help
+	  Enable CTU CAN FD usage with socketcan
+

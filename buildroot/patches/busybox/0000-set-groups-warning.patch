@@ -1,0 +1,11 @@
+--- busybox-1.33.1-orig/libbb/change_identity.c	2021-01-01 21:52:27.000000000 +1100
++++ busybox-1.33.1/libbb/change_identity.c	2021-10-07 16:57:55.056050558 +1100
+@@ -51,7 +51,7 @@
+ 			return;
+ 		}
+ 
+-		bb_simple_perror_msg_and_die("can't set groups");
++		bb_simple_perror_msg("can't set groups");
+ 	}
+ 
+ 	xsetgid(pw->pw_gid);
