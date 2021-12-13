@@ -43,9 +43,8 @@ class CTUCANFD(Module, AutoCSR):
         ])
 
         # IRQs.
-        self.submodules.ev = EventManager()
-        self.ev.interrupt = EventSourceLevel()
-        self.ev.finalize()
+        self.submodules.ev = ev = Module()
+        ev.irq = Signal()
 
         # CTU CAN-FD Instance ----------------------------------------------------------------------
         self.core_params = dict()
@@ -136,7 +135,7 @@ class CTUCANFD(Module, AutoCSR):
             o_data_out = mem_data_out,
 
             # Interrupt.
-            o_irq = self.ev.interrupt.trigger,
+            o_irq = ev.irq,
 
             # CAN Bus.
             o_can_tx = pads.tx,
