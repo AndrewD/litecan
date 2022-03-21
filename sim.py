@@ -16,7 +16,7 @@ from litex.soc.integration.builder import *
 from litex.soc.integration.soc import *
 from litex.soc.interconnect import wishbone
 
-from litecan.ctucanfd import CTUCANFD
+from ctucanfd import CTUCANFD
 
 # IOs ----------------------------------------------------------------------------------------------
 
