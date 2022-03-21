@@ -42,12 +42,11 @@ class BenchSoC(BaseSoC):
         can_pads = self.platform.request("can", loose=True) if with_can else None
         if can_pads is not None:
             name = "ctu_can_fd0"
-            self.mem_map[name] = 0x90000000
             can = CTUCANFD(self.platform, pads=can_pads, variant="ghdl-verilog")
             setattr(self.submodules, name, can)
             if self.irq.enabled:
                 self.add_interrupt(name)
-            self.bus.add_slave(name, can.bus, SoCRegion(origin=self.mem_map[name], size=65536, mode="rw", cached=False))
+            self.bus.add_slave(name, can.bus, SoCRegion(size=0x1000, mode="rw", cached=False))
             self.add_csr("can")
 
 # Build --------------------------------------------------------------------------------------------
@@ -65,22 +64,32 @@ def main():
     soc_core_args(parser)
     args = parser.parse_args()
 
+    soc_kwargs     = soc_core_argdict(args)
+    builder_kwargs = builder_argdict(args)
+
+    bios_options = []
+    if args.with_can:
+        soc_kwargs["integrated_sram_size"] = 2048
+        bios_options = [ "TERM_MINI" ]
+        if soc_kwargs.get("cpu_type", "vexriscv") == "vexriscv":
+            soc_kwargs["cpu_variant"] = "minimal"
+
     soc = BenchSoC(
         bios_flash_offset = args.bios_flash_offset,
         sys_clk_freq      = int(float(args.sys_clk_freq)),
         with_can = args.with_can,
-        **soc_core_argdict(args))
-    builder = Builder(soc, **builder_argdict(args))
+        **soc_kwargs)
+    builder = Builder(soc, bios_options = bios_options, **builder_kwargs)
     builder.build(run=args.build)
 
     if args.load:
         prog = soc.platform.create_programmer()
-        prog.load_bitstream(os.path.join(builder.gateware_dir, f"outflow/{soc.build_name}.bit"))
+        prog.load_bitstream(os.path.join(builder.gateware_dir, f"{soc.build_name}.bit"))
 
     if args.flash:
         from litex.build.openfpgaloader import OpenFPGALoader
         prog = OpenFPGALoader("xyloni_spi")
-        prog.flash(0, os.path.join(builder.gateware_dir, f"outflow/{soc.build_name}.hex"))
+        prog.flash(0, os.path.join(builder.gateware_dir, f"{soc.build_name}.hex"))
         prog.flash(args.bios_flash_offset, os.path.join(builder.software_dir, "bios/bios.bin"))
 
 if __name__ == "__main__":
