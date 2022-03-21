@@ -33,6 +33,7 @@ LiteX can be installed by following the installation instructions from the LiteX
     % path/to/bench/xyloni.py --build --flash --with-can
     % litex_term /dev/ttyUSB3
 
+```
        / /  (_) /____ | |/_/
       / /__/ / __/ -_)>  <
      /____/_/\__/\__/_/|_|
@@ -101,3 +102,4 @@ Memory dump:
 0x800000d0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
 0x800000e0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
 0x800000f0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+```
