@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #
-# This file is part of LiteCAN and derived form LiteScope.
+# This file is part of LiteCAN and derived from LiteScope.
 #
 # Copyright (c) 2021 Andrew Dennison <andrew@motec.com.au>
 # Copyright (c) 2020 Florent Kermarrec <florent@enjoy-digital.fr>
@@ -11,8 +11,6 @@
 # ./ecpix5.py --build --load
 # lxserver --udp (for LiteScope over UDP)
 # litescope_cli --help: list the available trigger option.
-
-# TODO: move to bench subdir when litecan is installed properly
 
 import os
 import argparse
@@ -29,7 +27,7 @@ from litex_boards.platforms import ecpix5
 from litex_boards.targets.ecpix5 import *
 
 from litescope import LiteScopeAnalyzer
-from litecan.ctucanfd import CTUCANFD
+from ctucanfd import CTUCANFD
 
 
 # LiteScopeSoC -------------------------------------------------------------------------------------

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (c) 2021 MoTeC
+# This file is part of LiteCAN and derived from the LiteX-Boards target for Efinix Xyloni.
+#
+# Copyright (c) 2021 Andrew Dennison <andrew@motec.com.au>
+# Copyright (c) 2021 Franck Jullien <franck.jullien@collshade.fr>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 # Use:
@@ -14,7 +18,7 @@ from litex.build.generic_platform import *
 
 from litex_boards.targets.efinix_xyloni_dev_kit import *
 
-from litecan.ctucanfd import CTUCANFD
+from ctucanfd import CTUCANFD
 
 
 # BenchSoC -------------------------------------------------------------------------------------
@@ -45,21 +49,6 @@ class BenchSoC(BaseSoC):
                 self.add_interrupt(name)
             self.bus.add_slave(name, can.bus, SoCRegion(origin=self.mem_map[name], size=65536, mode="rw", cached=False))
             self.add_csr("can")
-
-        # LiteScope Analyzer -----------------------------------------------------------------------
-        if False:
-            from litescope import LiteScopeAnalyzer
-            count = Signal(8)
-            self.sync += count.eq(count + 1)
-            self.analyzer_signals = [
-            count,
-            ]
-            self.submodules.analyzer = LiteScopeAnalyzer(self.analyzer_signals,
-            depth        = 1024,
-            clock_domain = "sys",
-            #register     = True,
-            csr_csv      = "analyzer.csv")
-            self.add_csr("analyzer")
 
 # Build --------------------------------------------------------------------------------------------
 
