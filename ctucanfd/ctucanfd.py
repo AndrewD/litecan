@@ -88,7 +88,7 @@ class CTUCANFD(Module, AutoCSR):
             print("WARNING: Using default CTU CAN-FD parameters due to a GHDL limitation!")
             print("See: https://github.com/ghdl/ghdl-yosys-plugin/issues/136")
         else:
-            self.core_params.udate(
+            self.core_params.update(
                 # Target technology (ASIC or FPGA)
                 #p_target_technology = C_TECH_FPGA
 
@@ -102,7 +102,7 @@ class CTUCANFD(Module, AutoCSR):
                 p_sup_filtC = False,
 
                 # Range Filter.
-                p_sup_filtV = False,
+                p_sup_range = False,
 
                 # Test registers.
                 p_sup_test_registers = False, # True by default but not recommended for FPGA?
