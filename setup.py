@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# manual setup: python3 setup.py develop --user
+# manual setup: python3 -m pip install --user -e .
 
 from setuptools import setup
 
