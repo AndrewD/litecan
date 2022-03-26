@@ -3,31 +3,30 @@
 #
 # This file is part of Linux-on-LiteX-VexRiscv
 #
-# Copyright (c) 2019-2021, Linux-on-LiteX-VexRiscv Developers
+# Copyright (c) 2019-2022, Linux-on-LiteX-VexRiscv Developers
 # SPDX-License-Identifier: BSD-2-Clause
 
+import os
 import sys
 import argparse
-import os
 
-from litex.soc.cores.cpu import VexRiscvSMP
 from litex.soc.integration.builder import Builder
-
-from migen.build.generic_platform import Pins, IOStandard, Subsignal, Misc
+from litex.soc.cores.cpu.vexriscv_smp import VexRiscvSMP
 
 from soc_linux import SoCLinux
 
-kB = 1024
-
-# Board definition----------------------------------------------------------------------------------
+# Board Definition ---------------------------------------------------------------------------------
 
 class Board:
-    soc_kwargs = {"integrated_rom_size": 0x10000, "l2_size": 0}
-    def __init__(self, soc_cls=None, soc_capabilities={}, soc_constants={}, bitstream_ext=""):
+    soc_kwargs = {
+        "integrated_rom_size"  : 0x10000,
+        "integrated_sram_size" : 0x1800,
+        "l2_size"              : 0
+    }
+    def __init__(self, soc_cls=None, soc_capabilities={}, soc_constants={}):
         self.soc_cls          = soc_cls
         self.soc_capabilities = soc_capabilities
         self.soc_constants    = soc_constants
-        self.bitstream_ext    = bitstream_ext
 
     def load(self, filename):
         prog = self.platform.create_programmer()
@@ -44,13 +43,6 @@ class Board:
 # ECPIX5 support -----------------------------------------------------------------------------------
 
 class ECPIX5(Board):
-    SPIFLASH_PAGE_SIZE    = 256
-    SPIFLASH_SECTOR_SIZE  = 64*kB
-    SPIFLASH_DUMMY_CYCLES = 8
-    soc_kwargs = {
-        "sys_clk_freq" : int(50e6),
-        "l2_size"      : 2048, # Use Wishbone and L2 for memory accesses.
-    }
     from litex.build.generic_platform import Subsignal, Pins, Misc, IOStandard
     io_extension = [
         ("can", 0,
@@ -66,14 +58,10 @@ class ECPIX5(Board):
             # Communication
             "serial",
             "ethernet",
-            # GPIO
-            #"rgb_led",
             # Storage
-            "sata",
             "sdcard",
-            "spiflash",
             "can",
-        }, bitstream_ext=".bit")
+        })
 
 #---------------------------------------------------------------------------------------------------
 # Build
@@ -87,22 +75,23 @@ supported_boards = {
 def main():
     description = "Linux on LiteX-VexRiscv\n\n"
     description += "Available boards:\n"
-    for name in supported_boards.keys():
+    for name in sorted(supported_boards.keys()):
         description += "- " + name + "\n"
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("--board",          required=True,            help="FPGA board")
-    parser.add_argument("--device",         default=None,             help="FPGA device")
-    parser.add_argument("--variant",        default=None,             help="FPGA board variant")
-    parser.add_argument("--toolchain",      default=None,             help="Toolchain use to build")
-    parser.add_argument("--build",          action="store_true",      help="Build bitstream")
-    parser.add_argument("--load",           action="store_true",      help="Load bitstream (to SRAM)")
-    parser.add_argument("--flash",          action="store_true",      help="Flash bitstream/images (to SPI Flash)")
-    parser.add_argument("--doc",            action="store_true",      help="Build documentation")
-    parser.add_argument("--local-ip",       default="192.168.1.50",   help="Local IP address")
-    parser.add_argument("--remote-ip",      default="192.168.1.100",  help="Remote IP address of TFTP server")
-    parser.add_argument("--spi-data-width", type=int, default=8,      help="SPI data width (maximum transfered bits per xfer)")
-    parser.add_argument("--spi-clk-freq",   type=int, default=1e6,    help="SPI clock frequency")
-    parser.add_argument("--fdtoverlays",    default="",               help="Device Tree Overlays to apply")
+    parser.add_argument("--board",          required=True,               help="FPGA board.")
+    parser.add_argument("--device",         default=None,                help="FPGA device.")
+    parser.add_argument("--variant",        default=None,                help="FPGA board variant.")
+    parser.add_argument("--toolchain",      default=None,                help="Toolchain use to build.")
+    parser.add_argument("--uart-baudrate",  default=115.2e3, type=float, help="UART baudrate.")
+    parser.add_argument("--build",          action="store_true",         help="Build bitstream.")
+    parser.add_argument("--load",           action="store_true",         help="Load bitstream (to SRAM).")
+    parser.add_argument("--flash",          action="store_true",         help="Flash bitstream/images (to Flash).")
+    parser.add_argument("--doc",            action="store_true",         help="Build documentation.")
+    parser.add_argument("--local-ip",       default="192.168.1.50",      help="Local IP address.")
+    parser.add_argument("--remote-ip",      default="192.168.1.100",     help="Remote IP address of TFTP server.")
+    parser.add_argument("--spi-data-width", default=8,   type=int,       help="SPI data width (max bits per xfer).")
+    parser.add_argument("--spi-clk-freq",   default=1e6, type=int,       help="SPI clock frequency.")
+    parser.add_argument("--fdtoverlays",    default="",                  help="Device Tree Overlays to apply.")
     VexRiscvSMP.args_fill(parser)
     args = parser.parse_args()
 
@@ -121,8 +110,15 @@ def main():
         soc_kwargs.update(board.soc_kwargs)
 
         # CPU parameters ---------------------------------------------------------------------------
-        # Do memory accesses through Wishbone and L2 cache when L2 size is configured.
-        args.with_wishbone_memory = soc_kwargs["l2_size"] != 0
+
+        # If Wishbone Memory is forced, enabled L2 Cache (if not already):
+        if args.with_wishbone_memory:
+
+            soc_kwargs["l2_size"] = max(soc_kwargs["l2_size"], 2048) # Defaults to 2048.
+        # Else if board is configured to use L2 Cache, force use of Wishbone Memory on VexRiscv-SMP.
+        else:
+            args.with_wishbone_memory = soc_kwargs["l2_size"] != 0
+
         VexRiscvSMP.args_read(args)
 
         # SoC parameters ---------------------------------------------------------------------------
@@ -132,12 +128,23 @@ def main():
             soc_kwargs.update(variant=args.variant)
         if args.toolchain is not None:
             soc_kwargs.update(toolchain=args.toolchain)
+
+        # UART.
+        soc_kwargs["uart_baudrate"] = int(args.uart_baudrate)
+        if "crossover" in board.soc_capabilities:
+            soc_kwargs.update(uart_name="crossover")
         if "usb_fifo" in board.soc_capabilities:
             soc_kwargs.update(uart_name="usb_fifo")
         if "usb_acm" in board.soc_capabilities:
             soc_kwargs.update(uart_name="usb_acm")
+
+        # Peripherals
+        if "leds" in board.soc_capabilities:
+            soc_kwargs.update(with_led_chaser=True)
         if "ethernet" in board.soc_capabilities:
             soc_kwargs.update(with_ethernet=True)
+        if "spiflash" in board.soc_capabilities:
+            soc_kwargs.update(with_spi_flash=True)
         if "sata" in board.soc_capabilities:
             soc_kwargs.update(with_sata=True)
         if "video_terminal" in board.soc_capabilities:
@@ -167,10 +174,6 @@ def main():
 
         if "mmcm" in board.soc_capabilities:
             soc.add_mmcm(2)
-        if "spiflash" in board.soc_capabilities:
-            soc.add_spi_flash(dummy_cycles=board.SPIFLASH_DUMMY_CYCLES)
-            soc.add_constant("SPIFLASH_PAGE_SIZE", board.SPIFLASH_PAGE_SIZE)
-            soc.add_constant("SPIFLASH_SECTOR_SIZE", board.SPIFLASH_SECTOR_SIZE)
         if "spisdcard" in board.soc_capabilities:
             soc.add_spi_sdcard()
         if "sdcard" in board.soc_capabilities:
@@ -193,7 +196,6 @@ def main():
             soc.add_icap_bitstream()
         if "can" in board.soc_capabilities:
             soc.add_can()
-        soc.configure_boot()
 
         # Build ------------------------------------------------------------------------------------
         build_dir = os.path.join("build", board_name)
@@ -214,11 +216,11 @@ def main():
 
         # Load FPGA bitstream ----------------------------------------------------------------------
         if args.load:
-            board.load(filename=os.path.join(builder.gateware_dir, soc.build_name + board.bitstream_ext))
+            board.load(filename=builder.get_bitstream_filename(mode="sram"))
 
         # Flash bitstream/images (to SPI Flash) ----------------------------------------------------
         if args.flash:
-            board.flash(filename=os.path.join(builder.gateware_dir, soc.build_name + board.bitstream_ext))
+            board.flash(filename=builder.get_bitstream_filename(mode="flash"))
 
         # Generate SoC documentation ---------------------------------------------------------------
         if args.doc:

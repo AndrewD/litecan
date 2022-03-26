@@ -1,7 +1,7 @@
 #
 # This file is part of Linux-on-LiteX-VexRiscv
 #
-# Copyright (c) 2019-2021, Linux-on-LiteX-VexRiscv Developers
+# Copyright (c) 2019-2022, Linux-on-LiteX-VexRiscv Developers
 # SPDX-License-Identifier: BSD-2-Clause
 
 #!/usr/bin/env python3
@@ -11,12 +11,11 @@ import json
 import shutil
 import subprocess
 
-from litex.soc.cores.cpu import VexRiscvSMP
 from migen import *
 
-from litex.soc.interconnect import wishbone
 from litex.soc.interconnect.csr import *
 
+from litex.soc.cores.cpu.vexriscv_smp import VexRiscvSMP
 from litex.soc.cores.gpio import GPIOOut, GPIOIn
 from litex.soc.cores.spi import SPIMaster
 from litex.soc.cores.bitbang import I2CMaster
@@ -25,89 +24,42 @@ from litex.soc.cores.pwm import PWM
 from litex.soc.cores.icap import ICAPBitstream
 from litex.soc.cores.clock import S7MMCM
 
-from litevideo.output import VideoOut
-
-from litex.build.generic_platform import *
-
-from litesdcard.phy import SDPHY
-from litesdcard.core import SDCore
-
 from litex.tools.litex_json2dts_linux import generate_dts
-
-# Helpers ------------------------------------------------------------------------------------------
-
-def platform_request_all(platform, name):
-    from litex.build.generic_platform import ConstraintError
-    r = []
-    while True:
-        try:
-            r += [platform.request(name, len(r))]
-        except ConstraintError:
-            break
-    if r == []:
-        raise ValueError
-    return r
 
 # SoCLinux -----------------------------------------------------------------------------------------
 
 def SoCLinux(soc_cls, **kwargs):
     class _SoCLinux(soc_cls):
-        csr_map = {**soc_cls.csr_map, **{
-            "ctrl":       0,
-            "uart":       2,
-            "timer0":     3,
-        }}
-        interrupt_map = {**soc_cls.interrupt_map, **{
-            "uart":       0,
-            "timer0":     1,
-        }}
         mem_map = {**soc_cls.mem_map, **{
-            "ethmac":       0xb0000000, # len: 0x2000
             "ctu_can_fd0":  0xb0010000, # len: 0x10000
-            "spiflash":     0xd0000000,
-            "csr":          0xf0000000,
         }}
 
-        def __init__(self, cpu_variant="linux", uart_baudrate=1e6, **kwargs):
+        def __init__(self, **kwargs):
 
             # SoC ----------------------------------------------------------------------------------
             soc_cls.__init__(self,
                 cpu_type       = "vexriscv_smp",
-                cpu_variant    = cpu_variant,
-                uart_baudrate  = uart_baudrate,
-                max_sdram_size = 0x40000000, # Limit mapped SDRAM to 1GB.
+                cpu_variant    = "linux",
                 **kwargs)
-
-            # Add linker region for OpenSBI
-            self.add_memory_region("opensbi", self.mem_map["main_ram"] + 0x00f00000, 0x80000, type="cached+linker")
-
-        # Leds -------------------------------------------------------------------------------------
-        def add_leds(self):
-            self.submodules.leds = GPIOOut(Cat(platform_request_all(self.platform, "user_led")))
-            self.add_csr("leds")
 
         # RGB Led ----------------------------------------------------------------------------------
         def add_rgb_led(self):
             rgb_led_pads = self.platform.request("rgb_led", 0)
             for n in "rgb":
                 setattr(self.submodules, "rgb_led_{}0".format(n), PWM(getattr(rgb_led_pads, n)))
-                self.add_csr("rgb_led_{}0".format(n))
 
         # Switches ---------------------------------------------------------------------------------
         def add_switches(self):
-            self.submodules.switches = GPIOIn(Cat(platform_request_all(self.platform, "user_sw")))
-            self.add_csr("switches")
-
+            self.submodules.switches = GPIOIn(Cat(self.platform.request_all("user_sw")), with_irq=True)
+            self.add_interrupt("switches")
         # SPI --------------------------------------------------------------------------------------
         def add_spi(self, data_width, clk_freq):
             spi_pads = self.platform.request("spi")
             self.submodules.spi = SPIMaster(spi_pads, data_width, self.clk_freq, clk_freq)
-            self.add_csr("spi")
 
         # I2C --------------------------------------------------------------------------------------
         def add_i2c(self):
             self.submodules.i2c0 = I2CMaster(self.platform.request("i2c", 0))
-            self.add_csr("i2c0")
 
         # CAN --------------------------------------------------------------------------------------
         def add_can(self, n=1):
@@ -126,12 +78,10 @@ def SoCLinux(soc_cls, **kwargs):
         # XADC (Xilinx only) -----------------------------------------------------------------------
         def add_xadc(self):
             self.submodules.xadc = XADC()
-            self.add_csr("xadc")
 
         # ICAP Bitstream (Xilinx only) -------------------------------------------------------------
         def add_icap_bitstream(self):
             self.submodules.icap_bit = ICAPBitstream();
-            self.add_csr("icap_bit")
 
         # MMCM (Xilinx only) -----------------------------------------------------------------------
         def add_mmcm(self, nclkout):
@@ -175,7 +125,6 @@ def SoCLinux(soc_cls, **kwargs):
             self.add_constant("clkout_divide_range_max", int(self.mmcm.clkout_divide_range[1]))
 
             self.mmcm.expose_drp()
-            self.add_csr("mmcm")
 
             self.comb += self.mmcm.reset.eq(self.mmcm.drp_reset.re)
 
@@ -193,11 +142,6 @@ def SoCLinux(soc_cls, **kwargs):
             self.add_constant("REMOTEIP2", int(remote_ip[1]))
             self.add_constant("REMOTEIP3", int(remote_ip[2]))
             self.add_constant("REMOTEIP4", int(remote_ip[3]))
-
-        # Boot configuration -----------------------------------------------------------------------
-        def configure_boot(self):
-            if hasattr(self, "spiflash"):
-                self.add_constant("FLASH_BOOT_ADDRESS", self.mem_map["spiflash"])
 
         # DTS generation ---------------------------------------------------------------------------
         def generate_dts(self, board_name):
