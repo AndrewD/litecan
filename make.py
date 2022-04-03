@@ -64,12 +64,39 @@ class ECPIX5(Board):
         })
 
 #---------------------------------------------------------------------------------------------------
+# Efinix Boards
+#---------------------------------------------------------------------------------------------------
+
+# Titanium support -----------------------------------------------------------------------------------
+
+class TI60_F225_dev_kit(Board):
+    from litex.build.generic_platform import Subsignal, Pins, Misc, IOStandard
+    io_extension = [
+        ("can", 0,
+            Subsignal("tx", Pins("P1:38")),
+            Subsignal("rx", Pins("P1:40")),
+            IOStandard("1.2_V_LVCMOS")
+        ),
+    ]
+
+    def __init__(self):
+        from litex_boards.targets import titanium_ti60_f225_dev_kit
+        Board.__init__(self, titanium_ti60_f225_dev_kit.BaseSoC, soc_capabilities={
+            # Communication
+            "serial",
+            # Storage
+            "sdcard",
+            "can",
+        })
+
+#---------------------------------------------------------------------------------------------------
 # Build
 #---------------------------------------------------------------------------------------------------
 
 supported_boards = {
     # Lattice
     "ecpix5":          ECPIX5,
+    "ti60_dev_kit":    TI60_F225_dev_kit,
 }
 
 def main():

@@ -40,6 +40,7 @@ def SoCLinux(soc_cls, **kwargs):
             soc_cls.__init__(self,
                 cpu_type       = "vexriscv_smp",
                 cpu_variant    = "linux",
+                with_hyperram  = True, # non-standard arg required for ti60_f225
                 **kwargs)
 
         # RGB Led ----------------------------------------------------------------------------------
