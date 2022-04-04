@@ -4,8 +4,11 @@
 #
 ################################################################################
 
-CTU_CAN_FD_SITE = https://gitlab.fel.cvut.cz/canbus/ctucanfd_ip_core.git
-CTU_CAN_FD_SITE_METHOD = git
+#CTU_CAN_FD_SITE = https://gitlab.fel.cvut.cz/canbus/ctucanfd_ip_core.git
+#CTU_CAN_FD_SITE_METHOD = git
+#CTU_CAN_FD_VERSION = 80b3c148078c2070ff3c6b1a87f80206e454482b
+CTU_CAN_FD_SITE = ../../../ctucanfd/ctucanfd_ip_core
+CTU_CAN_FD_SITE_METHOD = local
 CTU_CAN_FD_VERSION = 80b3c148078c2070ff3c6b1a87f80206e454482b
 CTU_CAN_FD_LICENSE = GPL-2.0+
 CTU_CAN_FD_LICENSE_FILES = LICENSE
