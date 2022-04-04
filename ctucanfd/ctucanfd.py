@@ -50,6 +50,8 @@ class CTUCANFD(Module, AutoCSR):
         self.core_params = dict()
 
         # Wishbone to CTU CAN-FD Memory Bus adaptation.
+        # CTU CAN-FD bus is single cycle access and supports burst read from the fifo
+        # so must ensure device is selected for only one sys_clock tick
         mem_scs      = Signal()
         mem_srd      = Signal()
         mem_swr      = Signal()
@@ -61,8 +63,8 @@ class CTUCANFD(Module, AutoCSR):
         self.comb += [
             # On Wishbone Access cycle...
             If(self.bus.cyc & self.bus.stb,
-                # Set scs.
-                mem_scs.eq(1),
+                # Set scs for 1st cycle only.
+                mem_scs.eq(~self.bus.ack),
                 # On Write, set swr on use sel as sbe.
                 If(self.bus.we,
                     mem_swr.eq(1),
@@ -81,7 +83,7 @@ class CTUCANFD(Module, AutoCSR):
             mem_data_in.eq(self.bus.dat_w),
             self.bus.dat_r.eq(mem_data_out),
         ]
-        self.sync += self.bus.ack.eq(mem_scs & ~self.bus.ack)
+        self.sync += self.bus.ack.eq(self.bus.cyc & self.bus.stb & ~self.bus.ack)
 
         # CTU CAN-FD Parameters.
         if variant == "ghdl-verilog":
